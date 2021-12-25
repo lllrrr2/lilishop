@@ -8,7 +8,7 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import cn.lili.event.GoodsCommentCompleteEvent;
 import cn.lili.modules.distribution.entity.dos.DistributionGoods;
-import cn.lili.modules.distribution.entity.dos.DistributionSelectedGoods;
+import cn.lili.modules.distribution.entity.dto.DistributionGoodsSearchParams;
 import cn.lili.modules.distribution.service.DistributionGoodsService;
 import cn.lili.modules.distribution.service.DistributionSelectedGoodsService;
 import cn.lili.modules.goods.entity.dos.*;
@@ -27,12 +27,11 @@ import cn.lili.modules.promotion.entity.dto.BasePromotions;
 import cn.lili.modules.promotion.entity.enums.PromotionsScopeTypeEnum;
 import cn.lili.modules.promotion.entity.vos.PromotionGoodsSearchParams;
 import cn.lili.modules.promotion.service.PromotionGoodsService;
+import cn.lili.modules.promotion.service.PromotionService;
 import cn.lili.modules.search.entity.dos.EsGoodsIndex;
 import cn.lili.modules.search.service.EsGoodsIndexService;
 import cn.lili.modules.store.service.StoreService;
 import cn.lili.rocketmq.tags.GoodsTagsEnum;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
@@ -114,6 +113,9 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
      */
     @Autowired
     private StoreGoodsLabelService storeGoodsLabelService;
+
+    @Autowired
+    private PromotionService promotionService;
 
     @Autowired
     private PromotionGoodsService promotionGoodsService;
@@ -258,7 +260,10 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
         List<EsGoodsIndex> goodsIndices = new ArrayList<>();
         for (Goods goods : goodsList) {
             //如果商品通过审核&&并且已上架
-            List<GoodsSku> goodsSkuList = this.goodsSkuService.list(new LambdaQueryWrapper<GoodsSku>().eq(GoodsSku::getGoodsId, goods.getId()).gt(GoodsSku::getQuantity, 0));
+            GoodsSearchParams searchParams = new GoodsSearchParams();
+            searchParams.setGoodsId(goods.getId());
+            searchParams.setGeQuantity(0);
+            List<GoodsSku> goodsSkuList = this.goodsSkuService.getGoodsSkuByList(searchParams);
             if (goods.getAuthFlag().equals(GoodsAuthEnum.PASS.name())
                     && goods.getMarketEnable().equals(GoodsStatusEnum.UPPER.name())
                     && Boolean.FALSE.equals(goods.getDeleteFlag())) {
@@ -287,7 +292,9 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
      */
     private void updateGoodsIndex(Goods goods) {
         //如果商品通过审核&&并且已上架
-        List<GoodsSku> goodsSkuList = this.goodsSkuService.list(new LambdaQueryWrapper<GoodsSku>().eq(GoodsSku::getGoodsId, goods.getId()));
+        GoodsSearchParams searchParams = new GoodsSearchParams();
+        searchParams.setGoodsId(goods.getId());
+        List<GoodsSku> goodsSkuList = this.goodsSkuService.getGoodsSkuByList(searchParams);
         if (goods.getAuthFlag().equals(GoodsAuthEnum.PASS.name())
                 && goods.getMarketEnable().equals(GoodsStatusEnum.UPPER.name())
                 && Boolean.FALSE.equals(goods.getDeleteFlag())) {
@@ -359,6 +366,11 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
                 goodsIndex.setStoreCategoryNamePath(ArrayUtil.join(storeGoodsLabels.stream().map(StoreGoodsLabel::getLabelName).toArray(), ","));
             }
         }
+
+        if (goodsIndex.getPromotionMap() == null || goodsIndex.getPromotionMap().isEmpty()) {
+            Map<String, Object> goodsCurrentPromotionMap = promotionService.getGoodsPromotionMap(goodsIndex);
+            goodsIndex.setPromotionMap(goodsCurrentPromotionMap);
+        }
     }
 
 
@@ -373,16 +385,19 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
     private void deleteGoods(MessageExt messageExt) {
         Goods goods = JSONUtil.toBean(new String(messageExt.getBody()), Goods.class);
 
+        DistributionGoodsSearchParams searchParams = new DistributionGoodsSearchParams();
+        searchParams.setGoodsId(goods.getId());
         //删除获取分销商品
-        DistributionGoods distributionGoods = distributionGoodsService.getOne(new LambdaQueryWrapper<DistributionGoods>()
-                .eq(DistributionGoods::getGoodsId, goods.getId()));
+        DistributionGoods distributionGoods = distributionGoodsService.getDistributionGoods(searchParams);
 
-        //删除分销商品绑定关系
-        distributionSelectedGoodsService.remove(new LambdaQueryWrapper<DistributionSelectedGoods>()
-                .eq(DistributionSelectedGoods::getDistributionGoodsId, distributionGoods.getId()));
+        if (distributionGoods != null) {
 
-        //删除分销商品
-        distributionGoodsService.removeById(distributionGoods.getId());
+            //删除分销商品绑定关系
+            distributionSelectedGoodsService.deleteByDistributionGoodsId(distributionGoods.getId());
+
+            //删除分销商品
+            distributionGoodsService.removeById(distributionGoods.getId());
+        }
     }
 
     /**
@@ -421,9 +436,7 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
                     goods.setBuyCount(0);
                 }
                 int buyCount = goods.getBuyCount() + goodsCompleteMessage.getBuyNum();
-                goodsService.update(new LambdaUpdateWrapper<Goods>()
-                        .eq(Goods::getId, goodsCompleteMessage.getGoodsId())
-                        .set(Goods::getBuyCount, buyCount));
+                this.goodsService.updateGoodsBuyCount(goodsCompleteMessage.getGoodsId(), buyCount);
             } else {
                 log.error("商品Id为[" + goodsCompleteMessage.getGoodsId() + "的商品不存在，更新商品失败！");
             }

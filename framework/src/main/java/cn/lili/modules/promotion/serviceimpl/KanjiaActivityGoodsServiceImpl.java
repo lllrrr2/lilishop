@@ -23,6 +23,7 @@ import cn.lili.modules.promotion.service.KanjiaActivityGoodsService;
 import cn.lili.modules.promotion.service.PromotionGoodsService;
 import cn.lili.modules.promotion.tools.PromotionTools;
 import cn.lili.mybatis.util.PageUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.springframework.beans.BeanUtils;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -214,7 +216,11 @@ public class KanjiaActivityGoodsServiceImpl extends AbstractPromotionsServiceImp
 
     @Override
     public KanjiaActivityGoods getKanjiaGoodsBySkuId(String skuId) {
-        KanjiaActivityGoods kanjiaActivityGoods = this.getOne(new QueryWrapper<KanjiaActivityGoods>().eq("sku_id", skuId), false);
+        KanjiaActivityGoods kanjiaActivityGoods = this.getOne(
+                new LambdaQueryWrapper<KanjiaActivityGoods>()
+                        .eq(KanjiaActivityGoods::getSkuId, skuId)
+                        .ge(KanjiaActivityGoods::getEndTime, new Date())
+                        .le(KanjiaActivityGoods::getStartTime, new Date()));
         if (kanjiaActivityGoods != null && PromotionsStatusEnum.START.name().equals(kanjiaActivityGoods.getPromotionStatus())) {
             return kanjiaActivityGoods;
         }
@@ -261,7 +267,8 @@ public class KanjiaActivityGoodsServiceImpl extends AbstractPromotionsServiceImp
             throw new ServiceException("商品id为" + goodsSku.getId() + "的商品已参加砍价商品活动！");
         }
         this.promotionGoodsService.deletePromotionGoods(Collections.singletonList(kanJiaActivityGoodsDTO.getId()));
-        this.updatePromotionsGoods(kanJiaActivityGoodsDTO);
+        PromotionGoods promotionGoods = new PromotionGoods(kanJiaActivityGoodsDTO);
+        this.promotionGoodsService.save(promotionGoods);
         this.updateEsGoodsIndex(kanJiaActivityGoodsDTO);
         //修改数据库
         return this.updateById(kanJiaActivityGoodsDTO);

@@ -406,6 +406,19 @@ public class GoodsServiceImpl extends ServiceImpl<GoodsMapper, Goods> implements
         this.updateById(goods);
     }
 
+    /**
+     * 更新商品的购买数量
+     *
+     * @param goodsId  商品ID
+     * @param buyCount 购买数量
+     */
+    @Override
+    public void updateGoodsBuyCount(String goodsId, int buyCount) {
+        this.update(new LambdaUpdateWrapper<Goods>()
+                .eq(Goods::getId, goodsId)
+                .set(Goods::getBuyCount, buyCount));
+    }
+
     @Override
     public void updateStoreDetail(Store store) {
         UpdateWrapper updateWrapper = new UpdateWrapper<>()
@@ -521,7 +534,9 @@ public class GoodsServiceImpl extends ServiceImpl<GoodsMapper, Goods> implements
     private LambdaUpdateWrapper<Goods> getUpdateWrapperByStoreAuthority() {
         LambdaUpdateWrapper<Goods> updateWrapper = new LambdaUpdateWrapper<>();
         AuthUser authUser = this.checkStoreAuthority();
-        updateWrapper.eq(Goods::getStoreId, authUser.getStoreId());
+        if (authUser != null) {
+            updateWrapper.eq(Goods::getStoreId, authUser.getStoreId());
+        }
         return updateWrapper;
     }
 
@@ -563,7 +578,9 @@ public class GoodsServiceImpl extends ServiceImpl<GoodsMapper, Goods> implements
     private LambdaUpdateWrapper<Goods> getUpdateWrapperByManagerAuthority() {
         LambdaUpdateWrapper<Goods> updateWrapper = new LambdaUpdateWrapper<>();
         AuthUser authUser = this.checkStoreAuthority();
-        updateWrapper.eq(Goods::getStoreId, authUser.getStoreId());
+        if (authUser != null) {
+            updateWrapper.eq(Goods::getStoreId, authUser.getStoreId());
+        }
         return updateWrapper;
     }
 
@@ -575,7 +592,9 @@ public class GoodsServiceImpl extends ServiceImpl<GoodsMapper, Goods> implements
     private LambdaQueryWrapper<Goods> getQueryWrapperByStoreAuthority() {
         LambdaQueryWrapper<Goods> queryWrapper = new LambdaQueryWrapper<>();
         AuthUser authUser = this.checkStoreAuthority();
-        queryWrapper.eq(Goods::getStoreId, authUser.getStoreId());
+        if (authUser != null) {
+            queryWrapper.eq(Goods::getStoreId, authUser.getStoreId());
+        }
         return queryWrapper;
     }
 
