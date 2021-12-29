@@ -2,7 +2,6 @@ package cn.lili.listener;
 
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.text.CharSequenceUtil;
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.ClassLoaderUtil;
 import cn.hutool.json.JSONObject;
@@ -23,10 +22,10 @@ import cn.lili.modules.member.entity.dos.FootPrint;
 import cn.lili.modules.member.entity.dos.MemberEvaluation;
 import cn.lili.modules.member.service.FootprintService;
 import cn.lili.modules.member.service.GoodsCollectionService;
+import cn.lili.modules.promotion.entity.dos.BasePromotions;
 import cn.lili.modules.promotion.entity.dos.PromotionGoods;
-import cn.lili.modules.promotion.entity.dto.BasePromotions;
+import cn.lili.modules.promotion.entity.dto.search.PromotionGoodsSearchParams;
 import cn.lili.modules.promotion.entity.enums.PromotionsScopeTypeEnum;
-import cn.lili.modules.promotion.entity.vos.PromotionGoodsSearchParams;
 import cn.lili.modules.promotion.service.PromotionGoodsService;
 import cn.lili.modules.promotion.service.PromotionService;
 import cn.lili.modules.search.entity.dos.EsGoodsIndex;
@@ -141,7 +140,7 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
                 }
                 break;
             case UPDATE_GOODS_INDEX_PROMOTIONS:
-                ThreadUtil.execAsync(() -> this.updateGoodsIndexPromotions(new String(messageExt.getBody())));
+                this.updateGoodsIndexPromotions(new String(messageExt.getBody()));
                 break;
             case DELETE_GOODS_INDEX_PROMOTIONS:
                 BasePromotions promotions = JSONUtil.toBean(new String(messageExt.getBody()), BasePromotions.class);
@@ -259,6 +258,7 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
                 searchParams.setCategoryPath(promotions.getScopeId());
                 List<GoodsSku> goodsSkuByList = this.goodsSkuService.getGoodsSkuByList(searchParams);
                 List<String> skuIds = goodsSkuByList.stream().map(GoodsSku::getId).collect(Collectors.toList());
+                this.goodsIndexService.deleteEsGoodsPromotionByPromotionId(skuIds, promotions.getId());
                 this.goodsIndexService.updateEsGoodsIndexPromotions(skuIds, promotions, esPromotionKey);
             } else if (PromotionsScopeTypeEnum.ALL.name().equals(promotions.getScopeType())) {
                 this.goodsIndexService.updateEsGoodsIndexAllByList(promotions, esPromotionKey);
