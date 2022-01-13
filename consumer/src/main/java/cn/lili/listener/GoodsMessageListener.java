@@ -188,6 +188,7 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
             case GOODS_AUDIT:
                 Goods goods = JSONUtil.toBean(new String(messageExt.getBody()), Goods.class);
                 updateGoodsNum(goods);
+                updateGoodsIndex(goods);
                 break;
             //删除商品
             case GOODS_DELETE:
@@ -389,7 +390,7 @@ public class GoodsMessageListener implements RocketMQListener<MessageExt> {
         }
 
         if (goodsIndex.getPromotionMap() == null || goodsIndex.getPromotionMap().isEmpty()) {
-            Map<String, Object> goodsCurrentPromotionMap = promotionService.getGoodsPromotionMap(goodsIndex);
+            Map<String, Object> goodsCurrentPromotionMap = promotionService.getGoodsSkuPromotionMap(goodsIndex.getStoreId(), goodsIndex.getId());
             goodsIndex.setPromotionMapJson(JSONUtil.toJsonStr(goodsCurrentPromotionMap));
         }
     }
